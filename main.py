@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class Product:
     def __init__(self, code, name, selling_price, purchase_price, quantity, production_date, expiration_date):
@@ -9,10 +9,6 @@ class Product:
         self.quantity = quantity
         self.production_date = datetime.strptime(production_date, '%Y-%m-%d')
         self.expiration_date = datetime.strptime(expiration_date, '%Y-%m-%d')
-
-    def check_expiration(self):
-        current_date = datetime.now()
-        return current_date <= self.expiration_date
 
 class Invoice:
     def __init__(self, invoice_code, invoice_date):
@@ -26,11 +22,14 @@ class ManageProduct:
         self.invoice_list = []
 
     def add_product(self, product):
-        existing_product = next((p for p in self.product_list if p.code == product.code), None)
+        existing_product = None
+        for p in self.product_list:
+            if p.code == product.code:
+                existing_product = p
+                break
 
         if existing_product:
             # Mã sản phẩm đã tồn tại trong danh sách sản phẩm của quản lý,
-            # cập nhật thông tin sản phẩm
             existing_product.quantity += product.quantity
             existing_product.selling_price = product.selling_price
             existing_product.purchase_price = product.purchase_price
@@ -39,7 +38,6 @@ class ManageProduct:
             print(f"Products with the code {product.code} already exist in the list. Information has been updated.")
         else:
             # Mã sản phẩm chưa tồn tại trong danh sách sản phẩm của quản lý,
-            # thêm sản phẩm vào danh sách sản phẩm của quản lý
             self.product_list.append(product)
             print("The product has been added successfully.")
 
@@ -49,7 +47,10 @@ class ManageProduct:
         elif not keyword:
             raise ValueError("Keyword cannot be empty.")
         else:
-            results = [product for product in self.product_list if keyword.lower() in product.name.lower()]
+            results = []
+            for product in self.product_list:
+                if keyword.lower() in product.name.lower():
+                    results.append(product)
             return results
 
     def display_product_list(self):
@@ -96,8 +97,8 @@ class ManageProduct:
         return revenue_by_store
 
     def sort_revenue(self, ascending=True):
-        sorted_revenue = sorted(self.calculate_revenue_by_store(datetime.now().month, datetime.now().year).items(),
-                                key=lambda x: x[1], reverse=not ascending)
+        revenue_by_store = self.calculate_revenue_by_store(datetime.now().month, datetime.now().year)
+        sorted_revenue = sorted(revenue_by_store.items(), key=lambda x: x[1], reverse=not ascending)
         return sorted_revenue
 
     def display_top_bottom_products(self, top=True, count=5):
@@ -105,27 +106,42 @@ class ManageProduct:
         if not sorted_revenue:
             print("No data available.")
             return
-        print("\nTop {} Products:".format(count) if top else "\nBottom {} Products:".format(count))
+        if top:
+            print("\nTop {} Products:".format(count))
+        else:
+            print("\nBottom {} Products:".format(count))
+
         print("{:<10} {:<20} {:<15}".format("Code", "Name", "Total Revenue"))
         print("-" * 45)
         for i in range(min(count, len(sorted_revenue))):
             code, revenue = sorted_revenue[i]
-            product = next((p for p in self.product_list if p.code == code), None)
-            if product:
+            product = None
+            for p in self.product_list:
+                if p.code == code:
+                    product = p
+                    break
+            if product is not None:
                 print("{:<10} {:<20} {:<15}".format(code, product.name, revenue))
 
     def update_price_for_near_expiration(self):
         for product in self.product_list:
-            days_to_expire = (product.expiration_date - datetime.now()).days
-            if 7 <= days_to_expire <= 21:
+            expiration_date = product.expiration_date
+            current_date = datetime.now()
+            days_to_expire = (expiration_date - current_date).days
+
+            if days_to_expire == 21:
                 product.selling_price *= 0.765  # 23.5% discount
-            elif days_to_expire < 7:
+            elif days_to_expire < 21:
                 product.selling_price *= 0.431  # 56.9% discount
 
     def update_product_info(self, code, new_info):
         if not new_info or not isinstance(new_info, dict):
             raise ValueError("Invalid new information format.")
-        product = next((p for p in self.product_list if p.code == code), None)
+        product = None
+        for p in self.product_list:
+            if p.code == code:
+                product = p
+                break
         if product:
             for key, value in new_info.items():
                 if hasattr(product, key):
@@ -137,7 +153,11 @@ class ManageProduct:
             print("Product not found.")
 
     def delete_product(self, code):
-        product = next((p for p in self.product_list if p.code == code), None)
+        product = None
+        for p in self.product_list:
+            if p.code == code:
+                product = p
+                break
         if product:
             self.product_list.remove(product)
             print("Product deleted successfully.")
@@ -152,7 +172,11 @@ class ManageProduct:
             for item in invoice.product_list:
                 product_code = item['product_code']
                 quantity_sold = item['quantity_sold']
-                product = next((p for p in self.product_list if p.code == product_code), None)
+                product = None
+                for p in self.product_list:
+                    if p.code == product_code:
+                        product = p
+                        break
                 if product:
                     product.quantity -= quantity_sold
                 else:
@@ -165,16 +189,20 @@ class ManageProduct:
     def validate_invoice(self, invoice):
         if not isinstance(invoice, Invoice):
             raise ValueError("Invalid invoice instance.")
-
         for product_code, quantity in invoice.products.items():
             self.validate_product(product_code, quantity)
 
     def validate_product(self, product_code, quantity):
-        product = next((p for p in self.product_list if p.code == product_code), None)
-
+        product = None
+        for p in self.product_list:
+            if p.code == product_code:
+                product = p
+                break
         if quantity <= 0:
             raise ValueError("Invalid quantity. Quantity must be greater than 0.")
-
+        if product is None:
+            raise ValueError(f"The product with the code {product_code} can't be found in the product list.")
         if quantity > product.quantity:
             raise ValueError(
                 f"Insufficient quantity for product {product_code}. Available quantity: {product.quantity}.")
+
